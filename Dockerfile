@@ -14,7 +14,7 @@ RUN apk add --update --no-cache \
       postgresql-client \
       docker-cli
 
-RUN curl -o /bin/calcardbackup https://codeberg.org/BernieO/calcardbackup/raw/branch/master/calcardbackup && chmod +x /bin/calcardbackup
+RUN curl -o /bin/calcardbackup https://codeberg.org/BernieO/calcardbackup/raw/branch/stable/calcardbackup && chmod +x /bin/calcardbackup
 
 COPY --from=rclone /bin/rclone /bin/rclone
 
