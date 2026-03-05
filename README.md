@@ -21,6 +21,15 @@ Latest release:
 docker pull ghcr.io/lobaro/restic-backup-docker:latest
 ```
 
+# Fork Changes
+This fork includes additional tooling required for specific setups:
+- `fuse`
+- `bash`
+- `curl`
+- `postgresql-client`
+- `docker-cli`
+- `calcardbackup` script
+
 # Contributing
 Pull Requests to improve the image are always wellcome. Please create an issue about the PR first.
 
