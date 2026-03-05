@@ -1,18 +1,27 @@
-FROM alpine:latest as rclone
+FROM --platform=$TARGETPLATFORM docker.io/alpine:latest as rclone
+ARG TARGETPLATFORM
+
+RUN apk add wget
 
 # Get rclone executable
-ADD https://downloads.rclone.org/rclone-current-linux-amd64.zip /
-RUN unzip rclone-current-linux-amd64.zip && mv rclone-*-linux-amd64/rclone /bin/rclone && chmod +x /bin/rclone
+RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
+        wget https://downloads.rclone.org/rclone-current-linux-amd64.zip && unzip rclone-current-linux-amd64.zip && mv rclone-*-linux-amd64/rclone /bin/rclone && chmod +x /bin/rclone; \
+    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
+        wget https://downloads.rclone.org/rclone-current-linux-arm64.zip && unzip rclone-current-linux-arm64.zip && mv rclone-*-linux-arm64/rclone /bin/rclone && chmod +x /bin/rclone; \
+    elif [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
+        wget https://downloads.rclone.org/rclone-current-linux-arm-v7.zip && unzip rclone-current-linux-arm-v7.zip && mv rclone-*-linux-arm-v7/rclone /bin/rclone && chmod +x /bin/rclone; \
+    fi
 
-FROM restic/restic:0.12.0
+FROM docker.io/restic/restic:0.18.0
 
 # install mailx
 RUN apk add --update --no-cache \
-      heirloom-mailx fuse \
+      mailx fuse \
       bash \
       curl \
       postgresql-client \
-      docker-cli
+      docker-cli \
+      shadow
 
 RUN curl -o /bin/calcardbackup https://codeberg.org/BernieO/calcardbackup/raw/branch/stable/calcardbackup && chmod +x /bin/calcardbackup
 
@@ -27,11 +36,12 @@ ENV RESTIC_PASSWORD=""
 ENV RESTIC_TAG=""
 ENV NFS_TARGET=""
 ENV BACKUP_CRON="0 */6 * * *"
+ENV CHECK_CRON=""
+ENV RESTIC_INIT_ARGS=""
 ENV RESTIC_FORGET_ARGS=""
 ENV RESTIC_JOB_ARGS=""
+ENV RESTIC_DATA_SUBSET=""
 ENV MAILX_ARGS=""
-ENV RESTIC_REPOSITORY=""
-ENV RESTIC_PASSWORD=""
 ENV OS_AUTH_URL=""
 ENV OS_PROJECT_ID=""
 ENV OS_PROJECT_NAME=""
@@ -42,6 +52,7 @@ ENV OS_PASSWORD=""
 ENV OS_REGION_NAME=""
 ENV OS_INTERFACE=""
 ENV OS_IDENTITY_API_VERSION=3
+ENV BACKUP_SOURCES=""
 
 # openshift fix
 RUN mkdir /.cache && \
@@ -58,10 +69,8 @@ RUN mkdir /.cache && \
 VOLUME /data
 
 COPY backup.sh /bin/backup
+COPY check.sh /bin/check
 COPY entry.sh /entry.sh
-
-
-WORKDIR "/"
 
 ENTRYPOINT ["/entry.sh"]
 CMD ["tail","-fn0","/var/log/cron.log"]
