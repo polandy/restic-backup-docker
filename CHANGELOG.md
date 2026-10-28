@@ -1,7 +1,14 @@
 # Changelog
 
-## Unreleased
+## v2.0.0
+### Added
+* `RESTIC_INIT_REPO=true` lets the entrypoint run `restic init` when the repository does not exist
+* `/bin/healthcheck`, also the image's `HEALTHCHECK`: healthy while `crond` runs
 ### Changed
+* **Breaking:** the entrypoint initialises a repository only when `restic cat config` reports it missing (exit 10) and `RESTIC_INIT_REPO=true`; any other error (network, rclone token, password) stops the container with a message and exit status 1 instead of running `restic init`
+* **Breaking:** cron jobs log to the container's stdout (`docker logs`); `/var/log/cron.log` and the `tail -f` CMD are gone, the CMD is `crond -f`
+* **Breaking:** `/bin/check` exits with the status of `restic check` and aborts with exit status 1 when `/hooks/pre-check.sh` fails
+* The scripts run under bash with `set -u`, and the argument variables are split into arguments without glob expansion
 * rclone comes from the `rclone/rclone:1.75.2` image and both base images are pinned by digest, instead of `alpine:latest` plus `rclone-current`
 ### Removed
 * `calcardbackup`, downloaded unpinned from a branch at build time
