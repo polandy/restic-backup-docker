@@ -26,8 +26,18 @@ fi
 
 
 
-echo "Setup backup cron job with cron expression BACKUP_CRON: ${BACKUP_CRON}"
-echo "${BACKUP_CRON} /usr/bin/flock -n /var/run/backup.lock /bin/backup >> /var/log/cron.log 2>&1" > /var/spool/cron/crontabs/root
+# Start from an empty crontab: both jobs below are appended, and a restarted
+# container keeps its filesystem, so they would pile up on every start.
+: > /var/spool/cron/crontabs/root
+
+# An empty BACKUP_CRON leaves scheduling to the host, which then runs
+# /bin/backup itself (e.g. via docker exec after a pre-backup step).
+if [ -n "${BACKUP_CRON}" ]; then
+    echo "Setup backup cron job with cron expression BACKUP_CRON: ${BACKUP_CRON}"
+    echo "${BACKUP_CRON} /usr/bin/flock -n /var/run/backup.lock /bin/backup >> /var/log/cron.log 2>&1" >> /var/spool/cron/crontabs/root
+else
+    echo "BACKUP_CRON is empty, no backup cron job set up"
+fi
 
 # If CHECK_CRON is set we will enable automatic backup checking
 if [ -n "${CHECK_CRON}" ]; then

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.0
+### Added
+* An empty `BACKUP_CRON` disables the scheduled backup, for hosts that run `/bin/backup` themselves
+### Changed
+* `/bin/backup` exits with the status of `restic backup`, else of `restic forget`, instead of always 0
+
 ## v1.5.0
 ### Added
 * `sqlite3` for consistent online copies of SQLite databases in backup hooks

@@ -45,6 +45,32 @@ jobs:
           docker run --rm --entrypoint sh restic-backup:smoke -c \
             'restic version && rclone version && sqlite3 --version && pg_dumpall --version && docker --version'
 
+      # The entrypoint runs against a throwaway local repository and then
+      # prints the crontab it wrote: the default must schedule the backup, an
+      # empty BACKUP_CRON must not, and CHECK_CRON must work either way.
+      - name: Test the BACKUP_CRON handling
+        run: |
+          # The entrypoint logs to stdout too, so only lines tagged CRON: count.
+          run() {
+            docker run --rm -e RESTIC_REPOSITORY=/tmp/repo -e RESTIC_PASSWORD=smoke "$@" \
+              restic-backup:smoke sed 's/^/CRON: /' /var/spool/cron/crontabs/root | grep '^CRON: ' || true
+          }
+          run > default.txt
+          run -e BACKUP_CRON= -e "CHECK_CRON=0 12 9 * *" > disabled.txt
+          cat default.txt disabled.txt
+          grep -q '^CRON: 0 \*/6 \* \* \* .*/bin/backup' default.txt
+          # `! grep` would not trip bash -e, hence the explicit exit.
+          if grep -q '/bin/backup' disabled.txt; then exit 1; fi
+          grep -q '^CRON: 0 12 9 \* \* .*/bin/check' disabled.txt
+
+      # A host unit running /bin/backup via docker exec relies on its exit
+      # status: 0 into an initialised repository, non-zero into a missing one.
+      - name: Test the /bin/backup exit status
+        run: |
+          backup() { docker run --rm -e RESTIC_PASSWORD=smoke -e RESTIC_TAG=smoke -e RESTIC_REPOSITORY=/tmp/repo --entrypoint sh restic-backup:smoke -c "$1"; }
+          backup 'restic init -q && /bin/backup'
+          if backup '/bin/backup'; then echo "backup into a missing repository exited 0"; exit 1; fi
+
       - name: Log into Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
