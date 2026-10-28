@@ -20,6 +20,7 @@ RUN apk add --update --no-cache \
       bash \
       curl \
       postgresql-client \
+      sqlite \
       docker-cli \
       shadow
 

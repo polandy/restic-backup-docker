@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.5.0
+### Added
+* `sqlite3` for consistent online copies of SQLite databases in backup hooks
+### Changed
+* CI publishes to Docker Hub (`polandy/restic-backup`) on `vX.Y.Z` tags for linux/amd64 and linux/arm64; pull requests build only
+### Removed
+* The `latest`-pushing legacy workflow and the ghcr.io publish target
+* linux/arm/v7 build
+
 ## v1.4.2
 ### Removed 
 * Execute a repository check after prune was passed as a parameter in the forget call - use RESTIC_CHECK_CRON Var instead
