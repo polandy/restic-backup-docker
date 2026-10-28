@@ -63,6 +63,14 @@ jobs:
           if grep -q '/bin/backup' disabled.txt; then exit 1; fi
           grep -q '^CRON: 0 12 9 \* \* .*/bin/check' disabled.txt
 
+      # A host unit running /bin/backup via docker exec relies on its exit
+      # status: 0 into an initialised repository, non-zero into a missing one.
+      - name: Test the /bin/backup exit status
+        run: |
+          backup() { docker run --rm -e RESTIC_PASSWORD=smoke -e RESTIC_TAG=smoke -e RESTIC_REPOSITORY=/tmp/repo --entrypoint sh restic-backup:smoke -c "$1"; }
+          backup 'restic init -q && /bin/backup'
+          if backup '/bin/backup'; then echo "backup into a missing repository exited 0"; exit 1; fi
+
       - name: Log into Docker Hub
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3

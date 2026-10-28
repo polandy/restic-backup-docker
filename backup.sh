@@ -51,10 +51,12 @@ else
     copyErrorLog
 fi
 
+forgetRC=0
 if [[ $backupRC == 0 ]] && [ -n "${RESTIC_FORGET_ARGS}" ]; then
     echo "Forget about old snapshots based on RESTIC_FORGET_ARGS = ${RESTIC_FORGET_ARGS}"
     restic forget ${RESTIC_FORGET_ARGS} >> ${lastLogfile} 2>&1
     rc=$?
+    forgetRC=$rc
     logLast "Finished forget at $(date)"
     if [[ $rc == 0 ]]; then
         echo "Forget Successful"
@@ -95,3 +97,10 @@ if [ -f "/hooks/post-backup.sh" ]; then
 else
     echo "Post-backup script not found ..."
 fi
+
+# Report the run to the caller (a host unit running /bin/backup via docker
+# exec): the backup's status first, else the forget's.
+if [[ $backupRC != 0 ]]; then
+    exit $backupRC
+fi
+exit $forgetRC
