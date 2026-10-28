@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+### Changed
+* rclone comes from the `rclone/rclone:1.75.2` image and both base images are pinned by digest, instead of `alpine:latest` plus `rclone-current`
+### Removed
+* `calcardbackup`, downloaded unpinned from a branch at build time
+* `MAILX_ARGS` and `TEAMS_WEBHOOK_URL` notifications, with `mailx` and `curl`
+* `NFS_TARGET` mounting, with `fuse`
+* The image defaults for the OpenStack `OS_*` variables (restic still reads them when set)
+* `shadow` and the OpenShift group-permission fix
+* `AWS_ACCESS_KEY_ID` in `backup-last.log` and `check-last.log`
+* `build.sh`, `run.sh` and the broken container-structure-test files; CI covers the build
+
 ## v1.6.0
 ### Added
 * An empty `BACKUP_CRON` disables the scheduled backup, for hosts that run `/bin/backup` themselves

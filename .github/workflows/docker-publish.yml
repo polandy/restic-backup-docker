@@ -43,7 +43,13 @@ jobs:
       - name: Smoke-test the amd64 image
         run: |
           docker run --rm --entrypoint sh restic-backup:smoke -c \
-            'restic version && rclone version && sqlite3 --version && pg_dumpall --version && docker --version'
+            'restic version && rclone version && sqlite3 --version && pg_dumpall --version && docker --version && bash --version'
+          # The removed, unpinned tools must stay out of the image.
+          for tool in calcardbackup mail curl; do
+            if docker run --rm --entrypoint sh restic-backup:smoke -c "command -v $tool"; then
+              echo "$tool is back in the image"; exit 1
+            fi
+          done
 
       # The entrypoint runs against a throwaway local repository and then
       # prints the crontab it wrote: the default must schedule the backup, an
