@@ -14,14 +14,14 @@ RUN apk add --no-cache \
 
 COPY --from=rclone /usr/local/bin/rclone /bin/rclone
 
-RUN mkdir -p /mnt/restic /var/spool/cron/crontabs /var/log && \
-    touch /var/log/cron.log
+RUN mkdir -p /mnt/restic /var/spool/cron/crontabs /var/log
 
 ENV RESTIC_REPOSITORY=/mnt/restic
 ENV RESTIC_PASSWORD=""
 ENV RESTIC_TAG=""
 ENV BACKUP_CRON="0 */6 * * *"
 ENV CHECK_CRON=""
+ENV RESTIC_INIT_REPO=""
 ENV RESTIC_INIT_ARGS=""
 ENV RESTIC_FORGET_ARGS=""
 ENV RESTIC_JOB_ARGS=""
@@ -33,7 +33,12 @@ VOLUME /data
 
 COPY backup.sh /bin/backup
 COPY check.sh /bin/check
+COPY healthcheck.sh /bin/healthcheck
 COPY entry.sh /entry.sh
 
+HEALTHCHECK CMD ["/bin/healthcheck"]
+
+# crond in the foreground keeps the container alive; the jobs log to the
+# container's stdout themselves (see entry.sh).
 ENTRYPOINT ["/entry.sh"]
-CMD ["tail","-fn0","/var/log/cron.log"]
+CMD ["crond", "-f"]

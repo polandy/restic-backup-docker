@@ -23,7 +23,9 @@ conveniences are gone, and every tool in the image is pinned or comes from the p
 ## Environment variables
 
 * `RESTIC_REPOSITORY` - the restic repository. Default `/mnt/restic`.
-* `RESTIC_PASSWORD` - the repository password; also used for `restic init` on first start.
+* `RESTIC_PASSWORD` - the repository password.
+* `RESTIC_INIT_REPO` - `true` lets the entrypoint run `restic init` when the repository does not
+  exist yet. Without it a missing repository stops the container with exit status 1.
 * `RESTIC_TAG` - required by `/bin/backup`; tags every snapshot.
 * `BACKUP_CRON` - cron expression for `/bin/backup` (UTC). Default `0 */6 * * *`. An empty value
   disables the scheduled backup, e.g. when the host runs `/bin/backup` via `docker exec`.
@@ -52,22 +54,37 @@ usual; the image sets no defaults for them.
 fails. `/hooks/post-backup.sh` runs afterwards and receives the backup's exit status as `$1`.
 `/bin/check` runs `/hooks/pre-check.sh` and `/hooks/post-check.sh` the same way.
 
+## Startup
+
+The entrypoint opens the repository with `restic cat config`. Only when restic reports that the
+repository does not exist (exit status 10) and `RESTIC_INIT_REPO=true` does it run
+`restic init ${RESTIC_INIT_ARGS}`. Any other error - an unreachable backend, an expired rclone
+token, a wrong password - stops the container with a message naming restic's exit status and exit
+status 1, so a misconfiguration never ends in a second repository. It then writes the crontab and
+starts `crond -f`.
+
 ## Logs and exit status
 
-`docker logs` shows the cron log. The full restic output of the last run is in
+The cron jobs write to the container's stdout (`/proc/1/fd/1`), so `docker logs` and any log
+collector see them; nothing grows inside the container. The full restic output of the last run is in
 `/var/log/backup-last.log` (`/var/log/check-last.log`), and copied to
 `/var/log/backup-error-last.log` (`/var/log/check-error-last.log`) when the run fails.
 
 `/bin/backup` logs `Backup Successful` or `Backup Failed with Status <rc>` and exits with the
-status of `restic backup`, else of `restic forget`. `/bin/check` logs `Check Successful` or
-`Check Failed with Status <rc>`. Alerting may match these lines, so they are part of the
-interface.
+status of `restic backup`, else of `restic forget`, which logs `Forget Successful` or
+`Forget Failed with Status <rc>`. `/bin/check` logs `Check Successful` or
+`Check Failed with Status <rc>` and exits with the status of `restic check`. Alerting may match
+these lines, so they are part of the interface.
+
+`/bin/healthcheck` (also the image's `HEALTHCHECK`) exits 0 while `crond` runs, else 1. It stays
+healthy with an empty `BACKUP_CRON`; failed runs show up in the lines above, not here.
 
 ## Manual use
 
 ```
 docker exec -ti <container> /bin/backup
 docker exec -ti <container> /bin/check
+docker exec <container> sh -c '/usr/bin/flock -n /var/run/backup.lock /bin/check > /proc/1/fd/1 2>&1'  # like cron, result in docker logs
 docker exec -ti <container> restic snapshots
 docker exec -ti <container> restic restore <snapshot> --include /data/path --target /restore
 ```
@@ -83,6 +100,8 @@ services:
     hostname: nas
     init: true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/bin/healthcheck"]
     volumes:
       - /srv/app:/data/app:ro
       - ./restic-hooks:/hooks:ro
@@ -91,6 +110,7 @@ services:
       - RESTIC_REPOSITORY=rclone:remote:restic-app
       - RESTIC_PASSWORD=change-me
       - RESTIC_TAG=app
+      - RESTIC_INIT_REPO=true
       - BACKUP_CRON=0 3 * * *
       - CHECK_CRON=0 12 1 * *
       - RESTIC_DATA_SUBSET=2G
