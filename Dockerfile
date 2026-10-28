@@ -1,70 +1,32 @@
-FROM --platform=$TARGETPLATFORM docker.io/alpine:latest as rclone
-ARG TARGETPLATFORM
+# Both images pinned by version and digest so a rebuild of the same commit
+# yields the same binaries; Dependabot bumps them.
+FROM docker.io/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5 AS rclone
 
-RUN apk add wget
+FROM docker.io/restic/restic:0.18.0@sha256:4cf4a61ef9786f4de53e9de8c8f5c040f33830eb0a10bf3d614410ee2fcb6120
 
-# Get rclone executable
-RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-        wget https://downloads.rclone.org/rclone-current-linux-amd64.zip && unzip rclone-current-linux-amd64.zip && mv rclone-*-linux-amd64/rclone /bin/rclone && chmod +x /bin/rclone; \
-    elif [ "$TARGETPLATFORM" = "linux/arm64" ]; then \
-        wget https://downloads.rclone.org/rclone-current-linux-arm64.zip && unzip rclone-current-linux-arm64.zip && mv rclone-*-linux-arm64/rclone /bin/rclone && chmod +x /bin/rclone; \
-    elif [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
-        wget https://downloads.rclone.org/rclone-current-linux-arm-v7.zip && unzip rclone-current-linux-arm-v7.zip && mv rclone-*-linux-arm-v7/rclone /bin/rclone && chmod +x /bin/rclone; \
-    fi
-
-FROM docker.io/restic/restic:0.18.0
-
-# install mailx
-RUN apk add --update --no-cache \
-      mailx fuse \
+# Tools the pre-/post-backup hooks run inside the sidecar: database dumps
+# (postgresql-client, sqlite) and controlling app containers (docker-cli).
+RUN apk add --no-cache \
       bash \
-      curl \
-      postgresql-client \
-      sqlite \
       docker-cli \
-      shadow
+      postgresql-client \
+      sqlite
 
-RUN curl -o /bin/calcardbackup https://codeberg.org/BernieO/calcardbackup/raw/branch/stable/calcardbackup && chmod +x /bin/calcardbackup
+COPY --from=rclone /usr/local/bin/rclone /bin/rclone
 
-COPY --from=rclone /bin/rclone /bin/rclone
-
-RUN \
-    mkdir -p /mnt/restic /var/spool/cron/crontabs /var/log; \
-    touch /var/log/cron.log;
+RUN mkdir -p /mnt/restic /var/spool/cron/crontabs /var/log && \
+    touch /var/log/cron.log
 
 ENV RESTIC_REPOSITORY=/mnt/restic
 ENV RESTIC_PASSWORD=""
 ENV RESTIC_TAG=""
-ENV NFS_TARGET=""
 ENV BACKUP_CRON="0 */6 * * *"
 ENV CHECK_CRON=""
 ENV RESTIC_INIT_ARGS=""
 ENV RESTIC_FORGET_ARGS=""
 ENV RESTIC_JOB_ARGS=""
 ENV RESTIC_DATA_SUBSET=""
-ENV MAILX_ARGS=""
-ENV OS_AUTH_URL=""
-ENV OS_PROJECT_ID=""
-ENV OS_PROJECT_NAME=""
-ENV OS_USER_DOMAIN_NAME="Default"
-ENV OS_PROJECT_DOMAIN_ID="default"
-ENV OS_USERNAME=""
-ENV OS_PASSWORD=""
-ENV OS_REGION_NAME=""
-ENV OS_INTERFACE=""
-ENV OS_IDENTITY_API_VERSION=3
 ENV BACKUP_SOURCES=""
-
-# openshift fix
-RUN mkdir /.cache && \
-    chgrp -R 0 /.cache && \
-    chmod -R g=u /.cache && \
-    chgrp -R 0 /mnt && \
-    chmod -R g=u /mnt && \
-    chgrp -R 0 /var/spool/cron/crontabs/root && \
-    chmod -R g=u /var/spool/cron/crontabs/root && \
-    chgrp -R 0 /var/log/cron.log && \
-    chmod -R g=u /var/log/cron.log
 
 # /data is the dir where you have to put the data to be backed up
 VOLUME /data

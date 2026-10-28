@@ -1,8 +1,6 @@
 #!/bin/sh
 
 lastLogfile="/var/log/backup-last.log"
-lastMailLogfile="/var/log/mail-last.log"
-lastMicrosoftTeamsLogfile="/var/log/microsoft-teams-last.log"
 
 if [ -n "$BACKUP_SOURCES" ]; then
     backupSources="$BACKUP_SOURCES"
@@ -29,7 +27,7 @@ else
 fi
 
 start=`date +%s`
-rm -f ${lastLogfile} ${lastMailLogfile}
+rm -f ${lastLogfile}
 echo "Starting Backup at $(date +"%Y-%m-%d %H:%M:%S")"
 echo "Starting Backup at $(date)" >> ${lastLogfile}
 logLast "BACKUP_CRON: ${BACKUP_CRON}"
@@ -37,7 +35,6 @@ logLast "RESTIC_TAG: ${RESTIC_TAG}"
 logLast "RESTIC_FORGET_ARGS: ${RESTIC_FORGET_ARGS}"
 logLast "RESTIC_JOB_ARGS: ${RESTIC_JOB_ARGS}"
 logLast "RESTIC_REPOSITORY: ${RESTIC_REPOSITORY}"
-logLast "AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}"
 
 # Do not save full backup log to logfile but to backup-last.log
 restic backup ${backupSources} ${RESTIC_JOB_ARGS} --tag=${RESTIC_TAG?"Missing environment variable RESTIC_TAG"} >> ${lastLogfile} 2>&1
@@ -69,27 +66,6 @@ fi
 
 end=`date +%s`
 echo "Finished Backup at $(date +"%Y-%m-%d %H:%M:%S") after $((end-start)) seconds"
-
-if [ -n "${TEAMS_WEBHOOK_URL}" ]; then
-    teamsTitle="Restic Last Backup Log"
-    teamsMessage=$( cat ${lastLogfile} | sed 's/"/\"/g' | sed "s/'/\'/g" | sed ':a;N;$!ba;s/\n/\n\n/g' )
-    teamsReqBody="{\"title\": \"${teamsTitle}\", \"text\": \"${teamsMessage}\" }"
-    sh -c "curl -H 'Content-Type: application/json' -d '${teamsReqBody}' '${TEAMS_WEBHOOK_URL}' > ${lastMicrosoftTeamsLogfile} 2>&1"
-    if [ $? == 0 ]; then
-        echo "Microsoft Teams notification successfully sent."
-    else
-        echo "Sending Microsoft Teams notification FAILED. Check ${lastMicrosoftTeamsLogfile} for further information."
-    fi
-fi
-
-if [ -n "${MAILX_ARGS}" ]; then
-    sh -c "mail -v -S sendwait ${MAILX_ARGS} < ${lastLogfile} > ${lastMailLogfile} 2>&1"
-    if [ $? == 0 ]; then
-        echo "Mail notification successfully sent."
-    else
-        echo "Sending mail notification FAILED. Check ${lastMailLogfile} for further information."
-    fi
-fi
 
 if [ -f "/hooks/post-backup.sh" ]; then
     echo "Starting post-backup script ..."
