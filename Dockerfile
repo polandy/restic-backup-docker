@@ -5,10 +5,10 @@ FROM docker.io/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332
 FROM docker.io/restic/restic:0.18.0@sha256:4cf4a61ef9786f4de53e9de8c8f5c040f33830eb0a10bf3d614410ee2fcb6120
 
 # Tools the pre-/post-backup hooks run inside the sidecar: database dumps
-# (postgresql-client, sqlite) and controlling app containers (docker-cli).
+# (postgresql-client, sqlite). No docker-cli: a hook that needs another
+# container runs on the host, which then calls /bin/backup via docker exec.
 RUN apk add --no-cache \
       bash \
-      docker-cli \
       postgresql-client \
       sqlite
 

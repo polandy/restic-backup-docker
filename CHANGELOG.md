@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.0.0
+### Removed
+* **Breaking:** `docker-cli`; hooks can no longer stop, start or exec into other containers from the sidecar. Run such steps on the host and call `/bin/backup` via `docker exec` (with `BACKUP_CRON=""`)
+
 ## v2.0.0
 ### Added
 * `RESTIC_INIT_REPO=true` lets the entrypoint run `restic init` when the repository does not exist
