@@ -65,11 +65,11 @@ expect_out() {
 
 test_tools() {
     capture run --entrypoint sh "$IMAGE" -c \
-        'restic version && rclone version && sqlite3 --version && pg_dumpall --version && docker --version && bash --version'
+        'restic version && rclone version && sqlite3 --version && pg_dumpall --version && bash --version'
     expect_rc 0 || return 1
     # The removed, unpinned tools must stay out of the image.
     local tool
-    for tool in calcardbackup mail curl; do
+    for tool in calcardbackup mail curl docker; do
         capture run --entrypoint sh "$IMAGE" -c "command -v $tool || echo ABSENT"
         expect_out ABSENT || return 1
     done

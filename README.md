@@ -15,7 +15,6 @@ conveniences are gone, and every tool in the image is pinned or comes from the p
 |---------------------|--------------------------------------------------------|---------------------------------------|
 | `restic`            | base image `restic/restic` (pinned by digest)          | backups and checks                    |
 | `rclone`            | `rclone/rclone` image (pinned by digest)               | `rclone:` repositories                |
-| `docker-cli`        | Alpine package                                         | hooks that stop/start or exec into app containers |
 | `postgresql-client` | Alpine package                                         | `pg_dump`/`pg_dumpall` in hooks       |
 | `sqlite`            | Alpine package                                         | consistent online SQLite copies in hooks |
 | `bash`              | Alpine package                                         | hook scripts                          |
