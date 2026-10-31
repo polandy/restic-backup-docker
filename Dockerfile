@@ -34,6 +34,7 @@ VOLUME /data
 COPY backup.sh /bin/backup
 COPY check.sh /bin/check
 COPY healthcheck.sh /bin/healthcheck
+COPY sqlite-backup.sh /bin/sqlite-backup
 COPY entry.sh /entry.sh
 
 HEALTHCHECK CMD ["/bin/healthcheck"]

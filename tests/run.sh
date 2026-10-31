@@ -168,6 +168,96 @@ test_healthcheck() {
     expect_rc 1
 }
 
+# Runs a shell script in the image with a scratch layout under /t: database
+# /t/data/app.db, dump directory /t/dump with a previous good copy in it, and
+# a `sqlite3` stub in /t/bin that logs its arguments to /t/calls and runs
+# $STUB. The script stores the helper's exit status in $rc.
+sqlite_run() {
+    local stub=$1 script=$2
+    capture run -e "STUB=$stub" --entrypoint bash "$IMAGE" -c '
+        mkdir -p /t/data /t/dump /t/bin && : > /t/calls
+        echo "previous good copy" > /t/dump/app.db
+        printf "#!/bin/sh\necho \"\$*\" >> /t/calls\n%s\n" "$STUB" > /t/bin/sqlite3
+        chmod +x /t/bin/sqlite3
+        '"$script"
+}
+
+# Every failure must exit 1, name the cause, leave the previous copy alone and
+# leave no .partial file behind.
+expect_failed_loudly() {
+    expect_out "RC=1" || return 1
+    expect_out "$1" || return 1
+    expect_out "COPY=previous good copy" || return 1
+    expect_out "PARTIALS=0"
+}
+
+readonly SQLITE_REPORT='echo "RC=$rc"; echo "COPY=$(cat /t/dump/app.db)"
+    echo "PARTIALS=$(ls /t/dump | grep -c partial)"; echo "CALLS=$(wc -l < /t/calls)"'
+
+# Rows that live only in the -wal file (no checkpoint on close) must be in the
+# copy: the reason for .backup over restic reading the files one by one.
+test_sqlite_backup_copies_wal() {
+    capture run --entrypoint bash "$IMAGE" -c '
+        sqlite3 /tmp/app.db ".dbconfig no_ckpt_on_close on" "PRAGMA journal_mode=WAL;" \
+            "CREATE TABLE t (n INTEGER);" \
+            "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 50) INSERT INTO t SELECT n FROM c;" > /dev/null
+        [ -s /tmp/app.db-wal ] && echo WAL_HAS_DATA
+        /bin/sqlite-backup /tmp/app.db /tmp/dump
+        echo "RC=$?"
+        echo "ROWS=$(sqlite3 /tmp/dump/app.db "SELECT count(*) FROM t;")"
+        ls /tmp/dump'
+    expect_out WAL_HAS_DATA || return 1
+    expect_out "RC=0" || return 1
+    expect_out "ROWS=50" || return 1
+    if grep -q partial <<< "$out"; then
+        echo "  a .partial file was left behind"
+        return 1
+    fi
+}
+
+test_sqlite_backup_missing_database() {
+    sqlite_run "" "/bin/sqlite-backup /t/data/app.db /t/dump; rc=\$?; $SQLITE_REPORT"
+    expect_failed_loudly "database /t/data/app.db not found"
+}
+
+# The stub logs every call, so CALLS=0 is a recorded fact, not an absence of
+# evidence; test_sqlite_backup_copy_fails shows the same stub does log.
+test_sqlite_backup_require_shm() {
+    sqlite_run "" ": > /t/data/app.db
+        PATH=/t/bin:\$PATH /bin/sqlite-backup /t/data/app.db /t/dump --require-shm; rc=\$?
+        [ -e /t/data/app.db-shm ] && echo SHM_CREATED; $SQLITE_REPORT"
+    expect_failed_loudly "app.db-shm missing" || return 1
+    expect_out "CALLS=0" || return 1
+    if grep -q SHM_CREATED <<< "$out"; then
+        echo "  the -shm file was created"
+        return 1
+    fi
+}
+
+test_sqlite_backup_copy_fails() {
+    sqlite_run "exit 1" ": > /t/data/app.db
+        PATH=/t/bin:\$PATH /bin/sqlite-backup /t/data/app.db /t/dump; rc=\$?; $SQLITE_REPORT"
+    expect_failed_loudly "sqlite3 .backup of /t/data/app.db failed" || return 1
+    expect_out "CALLS=1"
+}
+
+# The stub writes a .partial on .backup and reports corruption on the check.
+test_sqlite_backup_integrity_fails() {
+    local stub='case "$*" in *.backup*) : > /t/dump/app.db.partial ;; *) echo "row 3 missing from index" ;; esac'
+    sqlite_run "$stub" ": > /t/data/app.db
+        PATH=/t/bin:\$PATH /bin/sqlite-backup /t/data/app.db /t/dump; rc=\$?; $SQLITE_REPORT"
+    expect_failed_loudly "integrity check of the copy failed: row 3 missing from index" || return 1
+    expect_out "CALLS=2"
+}
+
+test_sqlite_backup_usage() {
+    capture run --entrypoint /bin/sqlite-backup "$IMAGE" /t/data/app.db
+    expect_rc 2 || return 1
+    expect_out "usage: sqlite-backup" || return 1
+    capture run --entrypoint /bin/sqlite-backup "$IMAGE" /t/data/app.db /t/dump --require-wal
+    expect_rc 2
+}
+
 for t in $(declare -F | awk '$3 ~ /^test_/ {print $3}'); do
     if "$t"; then
         echo "PASS $t"
