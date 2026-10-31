@@ -1,5 +1,9 @@
 # Changelog
 
+## v3.1.0
+### Added
+* `/bin/sqlite-backup <database> <dump-dir> [--require-shm]`: consistent, integrity-checked copy of a live SQLite database for pre-backup hooks; a failed run keeps the previous copy
+
 ## v3.0.0
 ### Removed
 * **Breaking:** `docker-cli`; hooks can no longer stop, start or exec into other containers from the sidecar. Run such steps on the host and call `/bin/backup` via `docker exec` (with `BACKUP_CRON=""`)

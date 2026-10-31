@@ -53,6 +53,27 @@ usual; the image sets no defaults for them.
 fails. `/hooks/post-backup.sh` runs afterwards and receives the backup's exit status as `$1`.
 `/bin/check` runs `/hooks/pre-check.sh` and `/hooks/post-check.sh` the same way.
 
+### SQLite databases
+
+restic reads a live SQLite database file by file and can miss writes still in its `-wal` file.
+`/bin/sqlite-backup` copies it consistently instead, for use as the whole pre-backup hook:
+
+```sh
+#!/bin/sh
+exec /bin/sqlite-backup /data/app/app.db /data/app/db-dump
+```
+
+It copies `<database>` with SQLite's online backup API (waiting up to 30 s for a running write)
+to `<dump-dir>/<database file name>.partial`, runs `PRAGMA integrity_check` on the copy and only
+then replaces the previous copy, so a failed run leaves the last good copy in place. Any failure
+exits 1 with a message, which aborts `/bin/backup`. The dump directory must lie below a backed-up
+path; the live database files can be excluded with `RESTIC_JOB_ARGS`.
+
+`--require-shm` fails without running `sqlite3` when the database's `-shm` file is missing. Use it
+when the app runs as a different user than the hook (root): sqlite3 would otherwise create the
+`-wal`/`-shm` pair as root, and the app could no longer open its database if the copy were killed
+before removing them again.
+
 ## Startup
 
 The entrypoint opens the repository with `restic cat config`. Only when restic reports that the
