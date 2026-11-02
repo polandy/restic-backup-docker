@@ -9,13 +9,12 @@ readonly RUN_ID="restic-test-$$"
 readonly WORK_DIR="$(mktemp -d)"
 readonly RESTIC_EXIT_WRONG_PASSWORD=12
 
-volumes=()
 failed=()
 
+# Volumes are found by their run prefix: new_volume runs in a $(...) subshell,
+# so it cannot record them in a variable of this shell.
 cleanup() {
-    if [[ ${#volumes[@]} -gt 0 ]]; then
-        docker volume rm "${volumes[@]}" > /dev/null
-    fi
+    docker volume ls -q --filter "name=^${RUN_ID}-" | xargs -r docker volume rm > /dev/null
     rm -rf "$WORK_DIR"
 }
 trap cleanup EXIT
@@ -24,7 +23,6 @@ trap cleanup EXIT
 new_volume() {
     local name="${RUN_ID}-$1"
     docker volume create "$name" > /dev/null
-    volumes+=("$name")
     echo "$name"
 }
 
