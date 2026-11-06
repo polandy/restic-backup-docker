@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.2.0
+### Added
+* `/bin/backup` logs restic's run summary as one logfmt line, `msg="Backup Summary" files_new=… files_changed=… files_unmodified=… files_total=… data_added=… bytes_total=… snapshot=…`, for every run that wrote a snapshot
+* `jq`, installed explicitly instead of relying on the base image
+### Changed
+* `restic backup` runs with `--json --quiet`: `/var/log/backup-last.log` holds its errors as JSON lines, and its summary is kept in `/var/log/backup-last.json`
+
 ## v3.1.0
 ### Added
 * `/bin/sqlite-backup <database> <dump-dir> [--require-shm]`: consistent, integrity-checked copy of a live SQLite database for pre-backup hooks; a failed run keeps the previous copy
