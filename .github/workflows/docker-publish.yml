@@ -43,7 +43,8 @@ jobs:
       # Every test reports PASS/FAIL; the step fails if any of them does.
       # Covers the tools in the image, repository init (only for a missing
       # repository with RESTIC_INIT_REPO=true), the /bin/backup and /bin/check
-      # exit statuses, the crontab, job logging to stdout and /bin/healthcheck.
+      # exit statuses, the backup summary line, the crontab, job logging to
+      # stdout and /bin/healthcheck.
       - name: Test the amd64 image
         run: tests/run.sh restic-backup:smoke
 

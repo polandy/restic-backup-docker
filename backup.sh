@@ -2,6 +2,10 @@
 set -u
 
 lastLogfile="/var/log/backup-last.log"
+# restic's --json output of the last run; its summary feeds the summary line.
+lastJsonfile="/var/log/backup-last.json"
+# Prefix of the summary line, matched by log-based alert rules.
+readonly SUMMARY_MSG="Backup Summary"
 
 # Word-split on purpose: each variable may hold several paths or arguments.
 read -r -a backupSources <<< "${BACKUP_SOURCES:-/data}"
@@ -14,6 +18,27 @@ copyErrorLog() {
 
 logLast() {
   echo "$1" >> "$lastLogfile"
+}
+
+# Prints restic's run summary as one logfmt line, so a log pipeline can alert
+# on the share of new or changed files (ransomware rewrites them all). restic
+# also writes a summary when some files could not be read (exit status 3);
+# after a fatal error it writes none, and "Backup Failed" already says so.
+logSummary() {
+  local line
+  if ! line=$(jq -r --arg msg "$SUMMARY_MSG" 'select(.message_type == "summary")
+      | "msg=\"\($msg)\" files_new=\(.files_new) files_changed=\(.files_changed)"
+        + " files_unmodified=\(.files_unmodified) files_total=\(.total_files_processed)"
+        + " data_added=\(.data_added) bytes_total=\(.total_bytes_processed)"
+        + " snapshot=\(.snapshot_id[0:8])"' "$lastJsonfile"); then
+    echo "${SUMMARY_MSG} unreadable: jq failed on ${lastJsonfile}"
+    return
+  fi
+  if [[ -n "$line" ]]; then
+    echo "$line"
+  elif [[ $backupRC -eq 0 ]]; then
+    echo "${SUMMARY_MSG} missing: restic wrote no summary"
+  fi
 }
 
 if [[ -f "/hooks/pre-backup.sh" ]]; then
@@ -36,10 +61,14 @@ logLast "RESTIC_FORGET_ARGS: ${RESTIC_FORGET_ARGS:-}"
 logLast "RESTIC_JOB_ARGS: ${RESTIC_JOB_ARGS:-}"
 logLast "RESTIC_REPOSITORY: ${RESTIC_REPOSITORY}"
 
-# Do not save full backup log to logfile but to backup-last.log
-restic backup "${backupSources[@]}" "${jobArgs[@]}" --tag="${RESTIC_TAG?"Missing environment variable RESTIC_TAG"}" >> "$lastLogfile" 2>&1
+# Do not save full backup log to logfile but to backup-last.log. With --json
+# --quiet, stdout carries only the summary; errors go to stderr as JSON.
+restic backup --json --quiet "${backupSources[@]}" "${jobArgs[@]}" \
+    --tag="${RESTIC_TAG?"Missing environment variable RESTIC_TAG"}" > "$lastJsonfile" 2>> "$lastLogfile"
 backupRC=$?
+cat "$lastJsonfile" >> "$lastLogfile"
 logLast "Finished backup at $(date)"
+logSummary
 if [[ $backupRC -eq 0 ]]; then
     echo "Backup Successful"
 else

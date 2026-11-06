@@ -63,7 +63,7 @@ expect_out() {
 
 test_tools() {
     capture run --entrypoint sh "$IMAGE" -c \
-        'restic version && rclone version && sqlite3 --version && pg_dumpall --version && bash --version'
+        'restic version && rclone version && sqlite3 --version && pg_dumpall --version && bash --version && jq --version'
     expect_rc 0 || return 1
     # The removed, unpinned tools must stay out of the image.
     local tool
@@ -155,6 +155,47 @@ test_job_logs_to_stdout() {
     expect_out '["crond","-f"]' || return 1
     capture run --entrypoint sh "$IMAGE" -c '[ -e /var/log/cron.log ] && echo PRESENT || echo ABSENT'
     expect_out ABSENT
+}
+
+# The summary line of each run, from /data with files a, b and c; the second
+# run changes a, adds d and leaves b and c alone.
+test_backup_summary() {
+    capture run -e RESTIC_REPOSITORY=/tmp/repo --entrypoint sh "$IMAGE" -c '
+        restic init -q && mkdir -p /data && for f in a b c; do echo $f > /data/$f; done
+        /bin/backup && echo changed > /data/a && echo d > /data/d && /bin/backup'
+    expect_rc 0 || return 1
+    expect_out 'msg="Backup Summary" files_new=3 files_changed=0 files_unmodified=0 files_total=3 data_added=' || return 1
+    expect_out 'msg="Backup Summary" files_new=1 files_changed=1 files_unmodified=2 files_total=4 data_added=' || return 1
+    if ! grep -qE 'bytes_total=[0-9]+ snapshot=[0-9a-f]{8}$' <<< "$out"; then
+        echo "  expected bytes_total and an 8-character snapshot id at the end of the line"
+        echo "$out" | sed 's/^/  | /'
+        return 1
+    fi
+}
+
+# A file restic cannot read (root without the DAC capabilities) fails the run
+# with exit status 3, but the snapshot exists and its summary is logged.
+test_backup_summary_partial() {
+    capture run -e RESTIC_REPOSITORY=/tmp/repo --cap-drop DAC_OVERRIDE --cap-drop DAC_READ_SEARCH \
+        --entrypoint sh "$IMAGE" -c '
+        restic init -q && mkdir -p /data && echo a > /data/a && echo b > /data/b && chmod 000 /data/b
+        /bin/backup'
+    expect_rc 3 || return 1
+    expect_out "Backup Failed with Status 3" || return 1
+    expect_out 'msg="Backup Summary" files_new=1 files_changed=0 files_unmodified=0 files_total=1'
+}
+
+# Without a repository restic writes no summary: "Backup Failed" is the
+# positive sign the run got past restic, and no summary line may follow.
+test_backup_summary_fatal() {
+    capture run -e RESTIC_REPOSITORY=/tmp/repo --entrypoint /bin/backup "$IMAGE"
+    expect_nonzero_rc || return 1
+    expect_out "Backup Failed with Status" || return 1
+    if grep -q "Backup Summary" <<< "$out"; then
+        echo "  a summary line was logged for a run without a snapshot"
+        echo "$out" | sed 's/^/  | /'
+        return 1
+    fi
 }
 
 # Healthy with crond running (also with an empty crontab), unhealthy without:

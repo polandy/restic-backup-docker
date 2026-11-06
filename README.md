@@ -96,6 +96,19 @@ status of `restic backup`, else of `restic forget`, which logs `Forget Successfu
 `Check Failed with Status <rc>` and exits with the status of `restic check`. Alerting may match
 these lines, so they are part of the interface.
 
+Every backup that wrote a snapshot, including one that could not read some files (exit status 3),
+also logs restic's summary as one logfmt line:
+
+```
+msg="Backup Summary" files_new=1 files_changed=1 files_unmodified=2 files_total=4 data_added=1722 bytes_total=8 snapshot=aa5fedff
+```
+
+`files_new` and `files_changed` against `files_total` give the share of files a run rewrote, the
+signal ransomware leaves behind; `data_added` is the uncompressed size added to the repository. The
+line is also part of the interface. `restic backup` runs with `--json --quiet`, so
+`/var/log/backup-last.log` holds its errors as JSON lines and the summary is kept in
+`/var/log/backup-last.json`.
+
 `/bin/healthcheck` (also the image's `HEALTHCHECK`) exits 0 while `crond` runs, else 1. It stays
 healthy with an empty `BACKUP_CRON`; failed runs show up in the lines above, not here.
 
