@@ -2,12 +2,14 @@
 # yields the same binaries; Dependabot bumps them.
 FROM docker.io/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5 AS rclone
 
-FROM docker.io/restic/restic:0.18.0@sha256:4cf4a61ef9786f4de53e9de8c8f5c040f33830eb0a10bf3d614410ee2fcb6120
+FROM docker.io/restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
 
 # Tools the pre-/post-backup hooks run inside the sidecar: database dumps
 # (postgresql-client, sqlite). jq turns restic's JSON summary into a log line. No docker-cli: a hook that needs another
 # container runs on the host, which then calls /bin/backup via docker exec.
-RUN apk add --no-cache \
+# apk upgrade pulls Alpine's security fixes into the base's packages (openssl,
+# openssh-client) on every build, not only when upstream republishes restic.
+RUN apk upgrade --no-cache && apk add --no-cache \
       bash \
       jq \
       postgresql-client \

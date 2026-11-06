@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.3.0
+### Changed
+* Base image `restic/restic` 0.18.0 → 0.19.1 (Alpine 3.21 → 3.24, restic built with Go 1.26). Behaviour visible to callers: `/bin/backup` now fails with exit status 3 when a backup source path does not exist (restic used to exit 0), and `restic forget` exits 3 when it could not remove a snapshot
+* The build runs `apk upgrade`, so every rebuild picks up Alpine's security fixes for the base image's packages
+
 ## v3.2.0
 ### Added
 * `/bin/backup` logs restic's run summary as one logfmt line, `msg="Backup Summary" files_new=… files_changed=… files_unmodified=… files_total=… data_added=… bytes_total=… snapshot=…`, for every run that wrote a snapshot
